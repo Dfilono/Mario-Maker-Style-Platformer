@@ -7,7 +7,7 @@ def import_folder(path):
     for folder, sub, file in walk(path):
         for img in file:
             full_path = path + '/' + img
-            img_surf =  pg.image.load(full_path)
+            img_surf =  pg.image.load(full_path).convert_alpha()
             surface_list.append(img_surf)
     
     return surface_list
@@ -18,7 +18,7 @@ def import_folder_dict(path):
     for folder, sub, file in walk(path):
         for img in file:
             full_path = path + '/' + img
-            img_surf =  pg.image.load(full_path)
+            img_surf =  pg.image.load(full_path).convert_alpha()
             surface_dict[img.split('.')[0]] = img_surf
     
     return surface_dict
