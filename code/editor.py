@@ -52,21 +52,21 @@ class Editor:
         # create cluster
         cluster_size = 3
         local_cluster = [
-                        (cell_pos[0] + col - int(cluster_size / 2), cell_pos[1] + row - int(cluster_size / 2)) 
-                         for col in range(cluster_size) 
-                         for row in range(cluster_size)]
+			(cell_pos[0] + col - int(cluster_size / 2), cell_pos[1] + row - int(cluster_size / 2)) 
+			for col in range(cluster_size) 
+			for row in range(cluster_size)]
         
         # check neigbors
         for cell in local_cluster:
-            if cell in self.canvas_data:
+             if cell in self.canvas_data:
                 self.canvas_data[cell].terrain_neighbors = []
 
                 for name, side in NEIGHBOR_DIRECTIONS.items():
-                    neighbor_cell = (cell[0] + side[0], cell[1] + side[1])
+                    neighbor_cell = (cell[0] + side[0],cell[1] + side[1])
 
                     if neighbor_cell in self.canvas_data:
-                        if self.canvas_data[neighbor_cell].has_terrain:
-                            self.canvas_data[cell].terrain_neighbors.append(name)
+                         if self.canvas_data[neighbor_cell].has_terrain:
+                             self.canvas_data[cell].terrain_neighbors.append(name)
 
 
     # input
@@ -117,16 +117,16 @@ class Editor:
             self.selection_idx = int(self.menu.click(pg.mouse.get_pos(), pg.mouse.get_pressed()))
 
     def canvas_add(self):
-        if pg.mouse.get_pressed()[0] and not self.menu.rect.collidepoint(pg.mouse.get_pos()):
+         if pg.mouse.get_pressed()[0] and not self.menu.rect.collidepoint(pg.mouse.get_pos()):
             current_cell = self.get_current_cell()
-
+            
             if current_cell != self.last_cell:
-
+                
                 if current_cell in self.canvas_data:
                     self.canvas_data[current_cell].add_id(self.selection_idx)
                 else:
                     self.canvas_data[current_cell] = CanvasTile(self.selection_idx)
-                
+		
                 self.check_neighbors(current_cell)
                 self.last_cell = current_cell
             
