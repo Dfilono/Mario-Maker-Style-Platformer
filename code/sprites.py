@@ -1,13 +1,16 @@
 import pygame as pg
 from pygame.math import Vector2 as vector
 from settings import *
+from timer import Timer
+from random import choice
 
 class Generic(pg.sprite.Sprite):
-    def __init__(self, pos, surf, group):
+    def __init__(self, pos, surf, group, z = LEVEL_LAYERS['main']):
         super().__init__(group)
 
         self.image = surf
         self.rect = self.image.get_rect(topleft = pos)
+        self.z = z
 
 class Block(Generic):
     def __init__(self, pos, size, group):
@@ -16,11 +19,11 @@ class Block(Generic):
         super().__init__(pos, surf, group)
 
 class Animated(Generic):
-    def __init__(self, assets, pos, group):
+    def __init__(self, assets, pos, group, z = LEVEL_LAYERS['main']):
         self.animation_frames = assets
         self.frame_idx = 0
 
-        super().__init__(pos, self.animation_frames[self.frame_idx], group)
+        super().__init__(pos, self.animation_frames[self.frame_idx], group, z)
 
     def animate(self, dt):
         self.frame_idx += ANIM_SPEED * dt
@@ -57,7 +60,7 @@ class Spikes(Generic):
         super().__init__(pos, surf, group)
 
 class Tooth(Generic):
-    def __init__(self, assets, pos, group):
+    def __init__(self, assets, pos, group, collision_sprites):
         self.animation_frames = assets
         self.frame_idx = 0
         self.orient = 'right'
@@ -67,8 +70,54 @@ class Tooth(Generic):
 
         self.rect.bottom = self.rect.top + TILE_SIZE
 
+        # movement
+        self.direction = vector(choice((1, -1)), 0)
+        self.orient = 'left' if self.direction.x < 0 else 'right'
+        self.pos = vector(self.rect.topleft)
+        self.speed = 120
+        self.collision_sprites = collision_sprites
+
+        # destroy tooth if not on floor
+        if not [sprite for sprite in collision_sprites if sprite.rect.collidepoint(self.rect.midbottom + vector(0, 10))]:
+            self.kill()
+
+    def animate(self, dt):
+        animation = self.animation_frames[f'run_{self.orient}']
+        self.frame_idx += ANIM_SPEED * dt
+        self.frame_idx = 0 if self.frame_idx >= len(animation) else self.frame_idx
+        self.image = animation[int(self.frame_idx)]
+
+    def move(self, dt):
+        right_gap = self.rect.bottomright + vector(1, 1)
+        right_block = self.rect.midright + vector(1, 0)
+        left_gap = self.rect.bottomleft + vector(-1, 1)
+        left_block = self.rect.midleft + vector(-1, 0)
+
+        if self.direction.x > 0:
+            floor_sprites = [sprite for sprite in self.collision_sprites if sprite.rect.collidepoint(right_gap)]
+            wall_sprites = [sprite for sprite in self.collision_sprites if sprite.rect.collidepoint(right_block)]
+
+            if wall_sprites or not floor_sprites:
+                self.direction.x *= -1
+                self.orient = 'left'
+        
+        if self.direction.x < 0:
+            floor_sprites = [sprite for sprite in self.collision_sprites if sprite.rect.collidepoint(left_gap)]
+            wall_sprites = [sprite for sprite in self.collision_sprites if sprite.rect.collidepoint(left_block)]
+
+            if wall_sprites or not floor_sprites:
+                self.direction.x *= -1
+                self.orient = 'right'
+
+        self.pos.x += self.direction.x * self.speed * dt
+        self.rect.x = round(self.pos.x)
+
+    def update(self, dt):
+        self.animate(dt)
+        self.move(dt)
+
 class Shell(Generic):
-    def __init__(self, orient, assets, pos, group):
+    def __init__(self, orient, assets, pos, group, pearl_surf, damage_sprites):
         self.orient = orient
         self.animation_frames = assets.copy()
 
@@ -82,6 +131,63 @@ class Shell(Generic):
         super().__init__(pos, self.animation_frames[self.status][self.frame_idx], group)
 
         self.rect.bottom = self.rect.top + TILE_SIZE
+
+        # pearl
+        self.pearl_surf = pearl_surf
+        self.has_shot = False
+        self.cooldown = Timer(2000)
+        self.damage_group = damage_sprites
+
+    def animate(self, dt):
+        animation = self.animation_frames[self.status]
+        self.frame_idx += ANIM_SPEED * dt
+
+        if self.frame_idx >= len(animation):
+            self.frame_idx = 0
+
+            if self.has_shot:
+                self.cooldown.activate()
+                self.has_shot = False
+        
+        self.image = animation[int(self.frame_idx)]
+
+        if int(self.frame_idx) == 2 and self.status == 'attack' and not self.has_shot:
+            pearl_direction = vector(-1, 0) if self.orient == 'left' else vector(1, 0)
+            offset = (pearl_direction * 50) + vector(0, -10) if self.orient == 'left' else (pearl_direction * 20) + vector(0, -10)
+            Pearl(self.rect.center + offset, pearl_direction, self.pearl_surf, [self.groups()[0], self.damage_group])
+            self.has_shot = True
+
+    def get_status(self):
+        if vector(self.player.rect.center).distance_to((vector(self.rect.center))) < 500 and not self.cooldown.active:
+            self.status = 'attack'
+        else:
+            self.status = 'idle'
+
+    def update(self, dt):
+        self.get_status()
+        self.animate(dt)
+        self.cooldown.update()
+
+class Pearl(Generic):
+    def __init__(self, pos, direction, surf, group):
+        super().__init__(pos, surf, group)
+
+        # movement
+        self.pos = vector(self.rect.topleft)
+        self.direction = direction
+        self.speed = 150
+
+        # self destruct
+        self.timer = Timer(6000)
+        self.timer.activate()
+
+    def update(self, dt):
+        self.pos.x += self.direction.x * self.speed * dt
+        self.rect.x = round(self.pos.x)
+        self.timer.update()
+
+        if not self.timer.active:
+            self.kill()
 
 class Player(Generic):
     def __init__(self, pos, assets, group, collision_sprites):
