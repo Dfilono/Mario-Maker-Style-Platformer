@@ -2,7 +2,7 @@ import pygame as pg
 from pygame.math import Vector2 as vector
 from settings import *
 from timer import Timer
-from random import choice
+from random import choice, randint
 
 class Generic(pg.sprite.Sprite):
     def __init__(self, pos, surf, group, z = LEVEL_LAYERS['main']):
@@ -17,6 +17,21 @@ class Block(Generic):
         surf = pg.Surface(size)
 
         super().__init__(pos, surf, group)
+
+class Cloud(Generic):
+    def __init__(self, pos, surf, group, left_limit):
+        super().__init__(pos, surf, group, LEVEL_LAYERS['clouds'])
+
+        self.left_limit = left_limit
+        self.pos = vector(self.rect.topleft)
+        self.speed = randint(20, 30)
+
+    def update(self, dt):
+        self.pos.x -= self.speed * dt
+        self.rect.x = round(self.pos.x)
+
+        if self.rect.x <= self.left_limit:
+            self.kill()
 
 class Animated(Generic):
     def __init__(self, assets, pos, group, z = LEVEL_LAYERS['main']):
@@ -58,6 +73,7 @@ class Coin(Animated):
 class Spikes(Generic):
     def __init__(self, surf, pos, group):
         super().__init__(pos, surf, group)
+        self.mask = pg.mask.from_surface(self.image)
 
 class Tooth(Generic):
     def __init__(self, assets, pos, group, collision_sprites):
@@ -69,6 +85,7 @@ class Tooth(Generic):
         super().__init__(pos, surf, group)
 
         self.rect.bottom = self.rect.top + TILE_SIZE
+        self.mask = pg.mask.from_surface(self.image)
 
         # movement
         self.direction = vector(choice((1, -1)), 0)
@@ -86,6 +103,7 @@ class Tooth(Generic):
         self.frame_idx += ANIM_SPEED * dt
         self.frame_idx = 0 if self.frame_idx >= len(animation) else self.frame_idx
         self.image = animation[int(self.frame_idx)]
+        self.mask = pg.mask.from_surface(self.image)
 
     def move(self, dt):
         right_gap = self.rect.bottomright + vector(1, 1)
@@ -171,6 +189,7 @@ class Shell(Generic):
 class Pearl(Generic):
     def __init__(self, pos, direction, surf, group):
         super().__init__(pos, surf, group)
+        self.mask = pg.mask.from_surface(self.image)
 
         # movement
         self.pos = vector(self.rect.topleft)
@@ -199,6 +218,8 @@ class Player(Generic):
 
         super().__init__(pos, surf, group)
 
+        self.mask = pg.mask.from_surface(self.image)
+
         # movement
         self.direction = vector()
         self.pos = vector(self.rect.center)
@@ -209,6 +230,14 @@ class Player(Generic):
         # collision
         self.collision_sprites = collision_sprites
         self.hitbox = self.rect.inflate(-50, 0)
+
+        # inv frames
+        self.invul_timer = Timer(200)
+
+    def damage(self):
+        if not self.invul_timer.active:
+            self.invul_timer.activate()
+            self.direction.y -= 1.5
 
     def get_status(self):
         if self.direction.y < 0:
@@ -226,6 +255,12 @@ class Player(Generic):
         self.frame_idx += ANIM_SPEED * dt
         self.frame_idx = 0 if self.frame_idx >= len(current_state) else self.frame_idx
         self.image = current_state[int(self.frame_idx)]
+        self.mask = pg.mask.from_surface(self.image)
+
+        if self.invul_timer.active:
+            surf = self.mask.to_surface()
+            surf.set_colorkey('black')
+            self.image = surf
 
     def inputs(self):
         keys = pg.key.get_pressed()
@@ -294,6 +329,7 @@ class Player(Generic):
         self.apply_gravity(dt)
         self.move(dt)
         self.check_floor()
+        self.invul_timer.update()
 
         self.get_status()
         self.animate(dt)
