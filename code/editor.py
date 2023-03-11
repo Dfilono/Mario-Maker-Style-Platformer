@@ -9,9 +9,10 @@ from timer import Timer
 from random import choice, randint
 
 class Editor:
-    def __init__(self, land_tiles):
+    def __init__(self, land_tiles, switch):
         # main setup
         self.display_surface = pg.display.get_surface()
+        self.switch = switch
 
         # support
         self.canvas_data = {}
@@ -45,19 +46,21 @@ class Editor:
         self.menu = Menu()
 
         # objs
-        self.canvas_objs =pg.sprite.Group()
+        self.canvas_objs = pg.sprite.Group()
+        self.fg = pg.sprite.Group()
+        self.bg = pg.sprite.Group()
         self.obj_drag_active = False
         self.obj_timer = Timer(400)
         
         # player
-        CanvasObj((200, WINDOW_HEIGHT / 2), self.animations[0]['frames'], 0, self.origin, self.canvas_objs)
+        CanvasObj((200, WINDOW_HEIGHT / 2), self.animations[0]['frames'], 0, self.origin, [self.canvas_objs, self.fg])
 
         # sky
-        self.sky_handle = CanvasObj((WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2), [self.sky_handle_surf], 1, self.origin, self.canvas_objs)
+        self.sky_handle = CanvasObj((WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2), [self.sky_handle_surf], 1, self.origin, [self.canvas_objs, self.bg])
 
     # support
-    def get_current_cell(self):
-        distance_origin = vector(pg.mouse.get_pos()) - self.origin
+    def get_current_cell(self, obj = None):
+        distance_origin = vector(pg.mouse.get_pos()) - self.origin if not obj else vector(obj.distance_origin) - self.origin
 
         if distance_origin.x > 0:
             col = int(distance_origin.x / TILE_SIZE)
@@ -129,6 +132,66 @@ class Editor:
             if sprite.rect.collidepoint(pg.mouse.get_pos()):
                 return sprite
 
+    def create_grid(self):
+        # add objs to tiles
+        for tile in self.canvas_data.values():
+            tile.objs = []
+
+        for obj in self.canvas_objs:
+            current_cell = self.get_current_cell(obj)
+            offset = vector(obj.distance_origin) - (vector(current_cell) * TILE_SIZE)
+
+            if current_cell in self.canvas_data:
+                self.canvas_data[current_cell].add_id(obj.tile_id, offset)
+
+            else:
+                self.canvas_data[current_cell] = CanvasTile(obj.tile_id, offset)
+
+        # create grid
+        # grid offset
+        left = sorted(self.canvas_data.keys(), key = lambda tile: tile[0])[0][0]
+        top = sorted(self.canvas_data.keys(), key = lambda tile: tile[1])[0][1]
+
+        # empty grid
+        layers = {
+            'water' : {},
+            'bg palms' : {},
+            'terrain' : {},
+            'enemies' : {},
+            'coin' : {},
+            'fg objs' : {},
+        }
+
+        # fill grid
+        for tile_pos, tile in self.canvas_data.items():
+            row_adj = tile_pos[1] - top
+            col_adj = tile_pos[0] - left
+            x = col_adj * TILE_SIZE
+            y = row_adj * TILE_SIZE
+
+            if tile.has_water:
+                layers['water'][(x, y)] = tile.get_water()
+
+            if tile.has_terrain:
+                layers['terrain'][(x, y)] = tile.get_terrain() if tile.get_terrain() in self.land_tiles else 'X'
+
+            if tile.coin:
+                layers['coin'][(x + TILE_SIZE // 2, y+ TILE_SIZE // 2)] = tile.coin
+
+            if tile.enemy:
+                layers['enemies'][(x, y)] = tile.enemy
+
+            if tile.objs:
+                for obj, offset in tile.objs:
+                    if obj in [key for key, value in EDITOR_DATA.items() if value['style'] == 'palm_bg']:
+                        layers['bg palms'][(int(x + offset.x), int(y + offset.y))] = obj
+
+                    else:
+                        layers['fg objs'][(int(x + offset.x), int(y + offset.y))] = obj
+
+        return layers
+
+
     # input
     def event_loop(self):
         # event loop
@@ -137,6 +200,9 @@ class Editor:
             if event.type == pg.QUIT:
                 pg.quit()
                 sys.exit()
+            
+            if event.type == pg.KEYDOWN and event.key == pg.K_RETURN:
+                self.switch(self.create_grid())
             
             self.pan_input(event)
             self.selection_hotkeys(event)
@@ -201,7 +267,8 @@ class Editor:
             
             else:
                 if not self.obj_timer.active:
-                    CanvasObj(pg.mouse.get_pos(), self.animations[self.selection_idx]['frames'], self.selection_idx, self.origin, self.canvas_objs)
+                    groups = [self.canvas_objs, self.bg] if EDITOR_DATA[self.selection_idx]['style'] == 'palm_bg' else [self.canvas_objs, self.fg]
+                    CanvasObj(pg.mouse.get_pos(), self.animations[self.selection_idx]['frames'], self.selection_idx, self.origin, groups)
                 self.obj_timer.activate()
 
     def canvas_remove(self):
@@ -259,6 +326,8 @@ class Editor:
         self.display_surface.blit(self.support_line_surf, (0, 0))
 
     def draw_level(self):
+        self.bg.draw(self.display_surface)
+
         for cell_pos, tile in self.canvas_data.items():
             pos = self.origin + vector(cell_pos) * TILE_SIZE
 
@@ -289,7 +358,8 @@ class Editor:
                 surf = frames[idx]
                 rect = surf.get_rect(midbottom = (pos[0] + TILE_SIZE // 2, pos[1] + TILE_SIZE))
                 self.display_surface.blit(surf, rect)
-        self.canvas_objs.draw(self.display_surface)
+
+        self.fg.draw(self.display_surface)
 
     def preview(self):
         selected_obj = self.mouse_on_obj()
@@ -400,7 +470,7 @@ class Editor:
         self.menu.display(self.selection_idx)
 
 class CanvasTile:
-    def __init__(self, tile_id):
+    def __init__(self, tile_id, offset = vector()):
         # terrain
         self.has_terrain = False
         self.terrain_neighbors = []
@@ -418,16 +488,19 @@ class CanvasTile:
         # objs
         self.objs = []
 
-        self.add_id(tile_id)
+        self.add_id(tile_id, offset = offset)
         self.is_empty = False
 
-    def add_id(self, tile_id):
+    def add_id(self, tile_id, offset = vector()):
         options = {key : value['style'] for key, value in EDITOR_DATA.items()}
         match options[tile_id]:
             case 'terrain' : self.has_terrain = True
             case 'water' : self.has_water = True
             case 'coin' : self.coin = tile_id
             case 'enemy' : self.enemy = tile_id
+            case _ :
+                if (tile_id, offset) not in self.objs: 
+                    self.objs.append((tile_id, offset)) 
 
     def remove_id(self, tile_id):
         options = {key : value['style'] for key, value in EDITOR_DATA.items()}
@@ -442,6 +515,12 @@ class CanvasTile:
     def check_content(self):
         if not self.has_terrain and not self.has_water and not self.coin and not self.enemy:
             self.is_empty = True
+
+    def get_water(self):
+        return 'bottom' if self.water_top else 'top'
+    
+    def get_terrain(self):
+        return ''.join(self.terrain_neighbors)
 
 class CanvasObj(pg.sprite.Sprite):
     def __init__(self, pos, frames, tile_id, origin, group):
