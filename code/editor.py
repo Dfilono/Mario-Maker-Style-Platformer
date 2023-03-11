@@ -58,6 +58,11 @@ class Editor:
         # sky
         self.sky_handle = CanvasObj((WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2), [self.sky_handle_surf], 1, self.origin, [self.canvas_objs, self.bg])
 
+        # music
+        self.editor_music = pg.mixer.Sound('../audio/Explorer.ogg')
+        self.editor_music.set_volume(0.4)
+        self.editor_music.play(loops = -1)
+
     # support
     def get_current_cell(self, obj = None):
         distance_origin = vector(pg.mouse.get_pos()) - self.origin if not obj else vector(obj.distance_origin) - self.origin
@@ -191,7 +196,6 @@ class Editor:
 
         return layers
 
-
     # input
     def event_loop(self):
         # event loop
@@ -203,6 +207,7 @@ class Editor:
             
             if event.type == pg.KEYDOWN and event.key == pg.K_RETURN:
                 self.switch(self.create_grid())
+                self.editor_music.stop()
             
             self.pan_input(event)
             self.selection_hotkeys(event)
@@ -229,6 +234,9 @@ class Editor:
             else:
                 self.origin.x -= event.y * 50
 
+            for sprite in self.canvas_objs:
+                sprite.pan_pos(self.origin)
+
         # panning update
         if self.pan_active:
             self.origin = vector(pg.mouse.get_pos()) - self.pan_offset
@@ -247,7 +255,8 @@ class Editor:
 
     def menu_click(self, event):
         if event.type == pg.MOUSEBUTTONDOWN and self.menu.rect.collidepoint(pg.mouse.get_pos()):
-            self.selection_idx = int(self.menu.click(pg.mouse.get_pos(), pg.mouse.get_pressed()))
+            new_idx = self.menu.click(pg.mouse.get_pos(), pg.mouse.get_pressed())
+            self.selection_idx = new_idx if new_idx else self.selection_idx
 
     def canvas_add(self):
          if pg.mouse.get_pressed()[0] and not self.menu.rect.collidepoint(pg.mouse.get_pos()) and not self.obj_drag_active:

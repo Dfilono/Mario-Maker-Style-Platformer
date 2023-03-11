@@ -50,29 +50,40 @@ class Main:
         # clouds
         self.clouds = import_folder('../graphics/clouds')
 
+        # sounds
+        self.level_sounds = {
+            'coin' : pg.mixer.Sound('../audio/coin.wav'),
+            'hit' : pg.mixer.Sound('../audio/hit.wav'),
+            'jump' : pg.mixer.Sound('../audio/jump.wav'),
+            'music' : pg.mixer.Sound('../audio/SuperHero.ogg'),
+        }
+
     def toggle(self):
         self.editor_active = not self.editor_active
+
+        if self.editor_active:
+            self.editor.editor_music.play()
 
     def switch(self, grid = None):
         self.trans.active = True
 
         if grid:
             self.level = Level(grid, self.switch, {
-                'land' : self.land_tiles,
-                'water bottom' : self.water_bottom,
-                'water top' : self.water_top_anim, 
-                'gold' : self.gold,
-                'silver' : self.silver,
-                'diamond' : self.diamond,
-                'particle' : self.particle,
-                'palms' : self.palms,
-                'spikes' : self.spikes,
-                'tooth' : self.tooth,
-                'shell' : self.shell,
-                'player' : self.player_graphics,
-                'pearl' : self.pearl,
-                'clouds' : self.clouds,
-            })
+                    'land' : self.land_tiles,
+                    'water bottom' : self.water_bottom,
+                    'water top' : self.water_top_anim, 
+                    'gold' : self.gold,
+                    'silver' : self.silver,
+                    'diamond' : self.diamond,
+                    'particle' : self.particle,
+                    'palms' : self.palms,
+                    'spikes' : self.spikes,
+                    'tooth' : self.tooth,
+                    'shell' : self.shell,
+                    'player' : self.player_graphics,
+                    'pearl' : self.pearl,
+                    'clouds' : self.clouds},
+                self.level_sounds)
 
     def run(self):
         while True:

@@ -7,7 +7,7 @@ from sprites import Generic, Block, Animated, Particle, Coin, Player, Spikes, To
 from random import choice, randint
 
 class Level:
-    def __init__(self, grid, switch, asset_dict):
+    def __init__(self, grid, switch, asset_dict, audio):
         self.display_surface = pg.display.get_surface()
         self.switch = switch
 
@@ -18,7 +18,7 @@ class Level:
         self.collision_sprites = pg.sprite.Group()
         self.shell_sprites = pg.sprite.Group()
 
-        self.build_level(grid, asset_dict)
+        self.build_level(grid, asset_dict, audio['jump'])
 
         # level limits
         self.level_limits = {
@@ -33,7 +33,18 @@ class Level:
         pg.time.set_timer(self.cloud_timer, 2000)
         self.start_clouds()
 
-    def build_level(self, grid, asset_dict):
+        # sounds
+        self.bg_music = audio['music']
+        self.bg_music.set_volume(0.3)
+        self.bg_music.play(loops = -1)
+
+        self.coin_sound = audio['coin']
+        self.coin_sound.set_volume(0.3)
+
+        self.hit_sound = audio['hit']
+        self.hit_sound.set_volume(0.3)
+
+    def build_level(self, grid, asset_dict, jump_sound):
         for layer_name, layer in grid.items():
             for pos, data in layer.items():
                 if layer_name == 'terrain':
@@ -47,7 +58,7 @@ class Level:
                         Generic(pos, asset_dict['water bottom'], self.all_sprites, LEVEL_LAYERS['water'])
 
                 match data:
-                    case 0 : self.player = Player(pos, asset_dict['player'], self.all_sprites, self.collision_sprites)
+                    case 0 : self.player = Player(pos, asset_dict['player'], self.all_sprites, self.collision_sprites, jump_sound)
 
                     case 1:
                         self.horizon_y = pos[1]
@@ -90,12 +101,14 @@ class Level:
         collided_coins = pg.sprite.spritecollide(self.player, self.coin_sprites, True)
 
         for sprite in collided_coins:
+            self.coin_sound.play()
             Particle(self.particle_surf, sprite.rect.center, self.all_sprites)
 
     def get_damage(self):
         collision_sprites = pg.sprite.spritecollide(self.player, self.damage_sprites, False, pg.sprite.collide_mask)
 
         if collision_sprites:
+            self.hit_sound.play()
             self.player.damage()
 
     def event_loop(self):
@@ -106,6 +119,7 @@ class Level:
 
             if event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
                 self.switch()
+                self.bg_music.stop()
 
             if event.type == self.cloud_timer:
                 surf = choice(self.cloud_surf)
