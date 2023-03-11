@@ -84,10 +84,14 @@ class Shell(Generic):
         self.rect.bottom = self.rect.top + TILE_SIZE
 
 class Player(Generic):
-    def __init__(self, pos, group, collision_sprites):
-        super().__init__(pos, pg.Surface((80, 64)), group)
-        
-        self.image.fill('red')
+    def __init__(self, pos, assets, group, collision_sprites):
+        self.animation_frames = assets
+        self.frame_idx = 0
+        self.status = 'idle'
+        self.orient = 'right'
+        surf = self.animation_frames[f'{self.status}_{self.orient}'][self.frame_idx]
+
+        super().__init__(pos, surf, group)
 
         # movement
         self.direction = vector()
@@ -100,14 +104,33 @@ class Player(Generic):
         self.collision_sprites = collision_sprites
         self.hitbox = self.rect.inflate(-50, 0)
 
+    def get_status(self):
+        if self.direction.y < 0:
+            self.status = 'jump'
+        elif self.direction.y > 0.2:
+            self.status = 'fall'
+        else:
+            if self.direction.x != 0:
+                self.status = 'run'
+            else:
+                self.status = 'idle'
+
+    def animate(self, dt):
+        current_state = self.animation_frames[f'{self.status}_{self.orient}']
+        self.frame_idx += ANIM_SPEED * dt
+        self.frame_idx = 0 if self.frame_idx >= len(current_state) else self.frame_idx
+        self.image = current_state[int(self.frame_idx)]
+
     def inputs(self):
         keys = pg.key.get_pressed()
 
         if keys[pg.K_RIGHT] or keys[pg.K_d]:
             self.direction.x = 1
+            self.orient = 'right'
 
         elif keys[pg.K_LEFT] or keys[pg.K_a]:
             self.direction.x = -1
+            self.orient = 'left'
 
         else:
             self.direction.x = 0
@@ -165,3 +188,6 @@ class Player(Generic):
         self.apply_gravity(dt)
         self.move(dt)
         self.check_floor()
+
+        self.get_status()
+        self.animate(dt)

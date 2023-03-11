@@ -43,6 +43,9 @@ class Main:
         self.tooth = {folder : import_folder(f'../graphics/enemies/tooth/{folder}') for folder in list(walk('../graphics/enemies/tooth'))[0][1]}
         self.shell = {folder : import_folder(f'../graphics/enemies/shell_left/{folder}') for folder in list(walk('../graphics/enemies/shell_left'))[0][1]}
 
+        # player
+        self.player_graphics = {folder : import_folder(f'../graphics/player/{folder}') for folder in list(walk('../graphics/player'))[0][1]}
+
     def toggle(self):
         self.editor_active = not self.editor_active
 
@@ -62,6 +65,7 @@ class Main:
                 'spikes' : self.spikes,
                 'tooth' : self.tooth,
                 'shell' : self.shell,
+                'player' : self.player_graphics,
             })
 
     def run(self):
